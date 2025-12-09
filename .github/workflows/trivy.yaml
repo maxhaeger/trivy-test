@@ -1,0 +1,38 @@
+name: Build and Scan
+on: [push]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build an image from Dockerfile
+        run: docker build -t myapp:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner (Critical)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "myapp:${{ github.sha }}"
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+
+      # Schritt 2: Run Trivy (Reporting / SARIF)
+      - name: Run Trivy vulnerability scanner (Report)
+        uses: aquasecurity/trivy-action@master
+        if: always() # Auch ausführen, wenn Schritt 1 fehlschlug
+        with:
+          image-ref: "myapp:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
